@@ -4,8 +4,8 @@ market_research/*
 grafana-data/*
 minio-data/*
 vocoder_ckpt/*
-tech/StyleTTS2/checkpoints/*
-tech/parler_ckpt/*
+tech/**
+!tech/**/*.dvc
 
 # ignore python cache
 __pycache__/
