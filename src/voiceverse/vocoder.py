@@ -24,7 +24,7 @@ class HiFiGANVocoder:
             with open(self.config_path) as f:
                 h = json.load(f)
             model = BigVGAN.from_hparams(hparams=h) if hasattr(BigVGAN, "from_hparams") else BigVGAN(h)
-            state = torch.load(self.checkpoint_path, map_location="cpu")
+            state = torch.load(self.checkpoint_path, map_location="cpu", weights_only=False)
             # Common key is 'generator'
             if "generator" in state:
                 model.load_state_dict(state["generator"], strict=False)
@@ -76,7 +76,7 @@ class BigVGANVocoder:
             from bigvgan import BigVGAN
             # If you have a JSON config, you can pass it; otherwise construct with defaults
             model = BigVGAN(h=None, use_cuda_kernel=self.use_cuda_kernel)
-            state = torch.load(self.checkpoint_path, map_location="cpu")
+            state = torch.load(self.checkpoint_path, map_location="cpu", weights_only=False)
             # Usually generator weights at top-level or under 'generator'
             if "generator" in state:
                 model.load_state_dict(state["generator"], strict=False)

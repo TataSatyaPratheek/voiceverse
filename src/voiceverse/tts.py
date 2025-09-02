@@ -35,8 +35,10 @@ class StyleTTSWrapper:
         import yaml
         import builtins
         import torch
-        
-        torch.serialization.add_safe_globals([builtins.getattr])
+        from torch.optim.lr_scheduler import OneCycleLR
+        from torch.optim.adamw import AdamW
+
+        torch.serialization.add_safe_globals([builtins.getattr, OneCycleLR, AdamW])
         st_root = Path("tech/StyleTTS2").resolve()
         sys.path.insert(0, str(st_root))
         
@@ -81,7 +83,7 @@ class StyleTTSWrapper:
         model = build_model(model_params, asr_model, pitch_extractor, plbert)
 
         # Load weights (note: some checkpoints use 'net', 'model', or whole dict)
-        ckpt = torch.load(self.checkpoint_path, map_location="cpu")
+        ckpt = torch.load(self.checkpoint_path, map_location="cpu", weights_only=False)
         params = ckpt.get("net") or ckpt.get("model") or ckpt
         for key in model:
             if key in params:

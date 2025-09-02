@@ -21,7 +21,7 @@ def _load_persona_vector(persona_vector_path: str):
         vec = torch.tensor(data["vector"])
     elif p.suffix.lower() == ".pt":
         import torch
-        vec = torch.load(p, map_location="cpu")
+        vec = torch.load(p, map_location="cpu", weights_only=False)
     else:
         raise ValueError(f"Unsupported persona vector format: {p.suffix}")
     return vec
