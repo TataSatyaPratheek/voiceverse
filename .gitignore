@@ -1,5 +1,6 @@
 
 # ignore all large media and dataset folders, checkpoints
+clients/*
 market_research/*
 grafana-data/*
 minio-data/*
