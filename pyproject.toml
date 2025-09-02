@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
   "numpy",
-  "torch",
+  "torch",           # ensure CUDA build is installed separately as needed
   "librosa",
   "soundfile",
   "pandas",
@@ -28,22 +28,14 @@ dependencies = [
   "PyYAML",
   "transformers",
   "rich",
+  "indic-transliteration",    # Telugu transliteration
+  "phonemizer",                # needs espeak-ng system binary for full functionality
 ]
 
 [project.optional-dependencies]
-tts = [
-  "sentencepiece",
-  "huggingface_hub",
-]
-quality = [
-  "scikit-learn",
-]
-dev = [
-  "pytest",
-  "ruff",
-  "black",
-  "ipykernel",
-]
+tts = ["sentencepiece","huggingface_hub"]
+quality = ["scikit-learn"]
+dev = ["pytest","ruff","black","ipykernel"]
 
 [project.urls]
 Homepage = "https://example.com/voiceverse"
