@@ -11,6 +11,7 @@ tech/**
 # ignore python cache
 __pycache__/
 *.py[cod]
+*egg-info
 
 # ignore environment folders
 .venv/

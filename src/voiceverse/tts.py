@@ -46,14 +46,14 @@ class StyleTTSWrapper:
             style_controls = {"tempo": 1.0, "energy": 1.0, "warmth": 0.5, "formality": 0.5}
         
         # Text preprocessing
-        processed_text = self._preprocess_text(text)
+        processed_text = self._preprocess_multilingual_text(text)
         
         # Generate mel-spectrogram with persona conditioning
         mel = self._generate_mel(processed_text, persona_vector, style_controls)
         
         return mel
     
-    def _preprocess_text(self, text: str) -> torch.Tensor:
+    def _preprocess_multilingual_text(self, text: str) -> torch.Tensor:
         """Preprocess text for Telugu/English mixed input"""
         # Add language detection and phoneme conversion
         return torch.tensor([1, 2, 3])  # placeholder

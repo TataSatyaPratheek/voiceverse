@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voiceverse"
+version = "0.1.0"
+description = "Telugu/English TTS pipeline with persona vectors, StyleTTS2/Parler-TTS backbones, HiFi-GAN/BigVGAN vocoders, Prefect orchestration, and MLflow tracking."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "VoiceVerse Team" }]
+keywords = ["tts", "speech-synthesis", "telugu", "styletts2", "parler-tts", "vocoder", "prefect", "mlflow"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "numpy",
+  "torch",
+  "librosa",
+  "soundfile",
+  "pandas",
+  "tqdm",
+  "mlflow",
+  "prefect",
+  "PyYAML",
+  "transformers",
+  "rich",
+]
+
+[project.optional-dependencies]
+tts = [
+  "sentencepiece",
+  "huggingface_hub",
+]
+quality = [
+  "scikit-learn",
+]
+dev = [
+  "pytest",
+  "ruff",
+  "black",
+  "ipykernel",
+]
+
+[project.urls]
+Homepage = "https://example.com/voiceverse"
+Source = "https://example.com/voiceverse/repo"
+Issues = "https://example.com/voiceverse/issues"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["voiceverse*"]
