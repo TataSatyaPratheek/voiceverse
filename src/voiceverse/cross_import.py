@@ -144,9 +144,6 @@ def import_symbol_from_file(
     if callable(obj):
         @functools.wraps(obj)
         def _wrapped(*args, **kwargs):
-    if callable(obj):
-        @functools.wraps(obj)
-        def _wrapped(*args, **kwargs):
             with _temp_sys_path([code_root, *extra_paths]), _temp_cwd(repo_root):
                 if safe_globals:
                     try:
