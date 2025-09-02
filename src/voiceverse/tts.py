@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 import yaml
 import re
+from voiceverse.cross_import import import_symbol_from_file
 
 # Optional phonemization for better prosody; safe fallbacks if missing
 try:
@@ -23,80 +24,119 @@ except Exception:
 
 
 class StyleTTSWrapper:
-    """
-    StyleTTS2 wrapper: loads model from tech/StyleTTS2 and generates mel with persona/style controls.
-    Expects:
-      - checkpoint_path: e.g. tech/StyleTTS2/checkpoints/Models/LJSpeech/epoch_2nd_00180.pth
-      - config_path:     e.g. tech/StyleTTS2/checkpoints/Models/LJSpeech/config.yml
-    """
+    """StyleTTS2 wrapper with LJSpeech and auxiliary models loaded as in notebook."""
     def __init__(self, checkpoint_path: str, config_path: str, device: str = "cuda"):
         self.device = torch.device(device if torch.cuda.is_available() and device == "cuda" else "cpu")
-        self.checkpoint_path = Path(checkpoint_path)
-        self.config_path = Path(config_path)
-        self._ensure_styletts_on_path()
-        self.model, self.hps = self._load_styletts2_model()
-
-    def _ensure_styletts_on_path(self):
-        # Add tech/StyleTTS2 to import path
-        candidate = Path("tech/StyleTTS2").resolve()
-        if candidate.exists() and str(candidate) not in sys.path:
-            sys.path.insert(0, str(candidate))
+        self.checkpoint_path = Path(checkpoint_path).resolve()
+        self.config_path = Path(config_path).resolve()
+        self.model, self.sampler = self._load_styletts2_model()
 
     def _load_styletts2_model(self):
-        # Import StyleTTS2 code
         import yaml
+        import builtins
         import torch
-
-        from models import build_model  # provided by the StyleTTS2 repo
+        
+        torch.serialization.add_safe_globals([builtins.getattr])
+        st_root = Path("tech/StyleTTS2").resolve()
+        sys.path.insert(0, str(st_root))
+        
+        # Load config
         with open(self.config_path, "r") as f:
-            hps = yaml.safe_load(f)
+            config = yaml.safe_load(f)
+        from munch import Munch
+        def recursive_munch(x):  # helper for nested config objects
+            return Munch({k: recursive_munch(v) if isinstance(v, dict) else v for k, v in x.items()}) if isinstance(x, dict) else x
 
-        model = build_model(hps)
+        model_params = recursive_munch(config.get("model_params", {}))
+        
+        # Load auxiliary models
+        asr_weights_path = Path(config.get("ASR_path") or config.get("asr_weights", "Utils/ASR/epoch_00080.pth"))
+        asr_config_path = Path(config.get("ASR_config") or config.get("asr_config", "Utils/ASR/config.yml"))
+        f0_path = Path(config.get("F0_path") or config.get("f0_path", "Utils/JDC/bst.t7"))
+        plbert_dir = Path(config.get("PLBERT_dir", "Utils/PLBERT"))
+
+        # Resolve all paths to StyleTTS2 root
+        asr_weights_path = st_root / asr_weights_path if not asr_weights_path.is_absolute() else asr_weights_path
+        asr_config_path = st_root / asr_config_path if not asr_config_path.is_absolute() else asr_config_path
+        f0_path = st_root / f0_path if not f0_path.is_absolute() else f0_path
+        plbert_dir = Path(config.get("PLBERT_dir", "Utils/PLBERT"))
+        if not plbert_dir.is_absolute():
+            plbert_dir = st_root / plbert_dir
+
+        # Import helpers from StyleTTS2 repo
+        styletts_models_py = Path("/home/vi/Documents/audio_startup/tech/StyleTTS2/models.py")
+        plbert_util_py = Path("/home/vi/Documents/audio_startup/tech/StyleTTS2/Utils/PLBERT/util.py")
+        
+        load_ASR_models = import_symbol_from_file(styletts_models_py, "load_ASR_models")
+        load_F0_models = import_symbol_from_file(styletts_models_py, "load_F0_models")
+        build_model = import_symbol_from_file(styletts_models_py, "build_model")
+
+        load_plbert = import_symbol_from_file(plbert_util_py, "load_plbert")
+
+        asr_model = load_ASR_models(str(asr_weights_path), str(asr_config_path))
+        pitch_extractor = load_F0_models(str(f0_path))
+        plbert = load_plbert(str(plbert_dir))
+
+        # Build model as in notebook's build_model call
+        model = build_model(model_params, asr_model, pitch_extractor, plbert)
+
+        # Load weights (note: some checkpoints use 'net', 'model', or whole dict)
         ckpt = torch.load(self.checkpoint_path, map_location="cpu")
-        # StyleTTS2 checkpoints typically store weights under 'model' or full state_dict
-        state = ckpt["model"] if "model" in ckpt else ckpt
-        missing, unexpected = model.load_state_dict(state, strict=False)
-        if missing or unexpected:
-            print(f"[StyleTTS2] missing keys: {missing} | unexpected keys: {unexpected}")
-        model = model.to(self.device).eval()
-        return model, hps
+        params = ckpt.get("net") or ckpt.get("model") or ckpt
+        for key in model:
+            if key in params:
+                try:
+                    model[key].load_state_dict(params[key])
+                except Exception:
+                    from collections import OrderedDict
+                    state_dict = params[key]
+                    new_state_dict = OrderedDict()
+                    for k, v in state_dict.items():
+                        name = k[7:] if k.startswith("module.") else k
+                        new_state_dict[name] = v
+                    model[key].load_state_dict(new_state_dict, strict=False)
+        for k in model: model[k].eval(), model[k].to(self.device)
+
+        # Load sampler as in notebook
+        try:
+            diffusion_sampler_py = Path("/home/vi/Documents/audio_startup/tech/StyleTTS2/Modules/diffusion/sampler.py")
+            DiffusionSampler = import_symbol_from_file(diffusion_sampler_py, "DiffusionSampler")
+            ADPM2Sampler = import_symbol_from_file(diffusion_sampler_py, "ADPM2Sampler")
+            KarrasSchedule = import_symbol_from_file(diffusion_sampler_py, "KarrasSchedule")
+            sampler = DiffusionSampler(
+                model['diffusion']['diffusion'],
+                sampler=ADPM2Sampler(),
+                sigma_schedule=KarrasSchedule(sigma_min=0.0001, sigma_max=3.0, rho=9.0),
+                clamp=False
+            )
+        except Exception:
+            sampler = None
+
+        return (model, sampler)
 
     def synthesize(self, text: str, persona_vector: torch.Tensor, style_controls: Dict[str, float] | None = None) -> np.ndarray:
         """
-        Generate mel-spectrogram conditioned on text + persona vector + style controls.
-        style_controls keys: tempo [0.5..2.0], energy [0..1], warmth [0..1], formality [0..1]
+        Generate mel-spectrogram using the diffusion sampler.
         """
         if style_controls is None:
             style_controls = {"tempo": 1.0, "energy": 0.7, "warmth": 0.5, "formality": 0.5}
 
-        # Segment by language and phonemize
+        # Preprocess text
         tokens = self._preprocess_multilingual_text(text)
         tokens = torch.LongTensor(tokens).unsqueeze(0).to(self.device)
 
-        # Map scalar controls to model-consumable conditioning
-        tempo = torch.tensor([style_controls.get("tempo", 1.0)], device=self.device, dtype=torch.float32)
-        energy = torch.tensor([style_controls.get("energy", 0.7)], device=self.device, dtype=torch.float32)
-        warmth = torch.tensor([style_controls.get("warmth", 0.5)], device=self.device, dtype=torch.float32)
-        formality = torch.tensor([style_controls.get("formality", 0.5)], device=self.device, dtype=torch.float32)
-
-        # Persona vector to device
+        # Persona vector
         persona = persona_vector.to(self.device).float().unsqueeze(0)
 
-        # Forward (the exact signature can vary; adapt if your cloned repo differs)
+        # Use sampler for inference
         with torch.no_grad():
-            # Commonly: model.infer(text_ids, style_vec, tempo, energy, ...)
-            # Provide a generic call with kwargs and let unexpected keys be ignored internally if the signature differs
-            mel = self.model.infer(
-                text=tokens,
-                persona=persona,
-                tempo=tempo,
-                energy=energy,
-                warmth=warmth,
-                formality=formality,
-            )
-            if isinstance(mel, (list, tuple)):
-                mel = mel
-            mel = mel.squeeze(0).detach().cpu().float().numpy()
+            if self.sampler:
+                mel = self.sampler(tokens, persona, style_controls)
+                mel = mel.squeeze(0).detach().cpu().float().numpy()
+            else:
+                # Fallback if sampler not available
+                mel = self.model['diffusion'].infer(tokens, persona, **style_controls)
+                mel = mel.squeeze(0).detach().cpu().float().numpy()
         return mel
 
     def _preprocess_multilingual_text(self, text: str) -> List[int]:

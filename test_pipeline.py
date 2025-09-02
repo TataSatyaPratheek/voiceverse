@@ -31,7 +31,7 @@ def test_full_pipeline():
         result = episode_pipeline(
             dataset_path="data/telugu_english_samples",
             script_path="scripts/episode_001.txt", 
-            persona_vector_path="personas/telugu_narrator.pt"
+            persona_vector_path="personas/telugu_narrator.json"  # Use .json extension
         )
         print(f"✅ Pipeline completed successfully: {result}")
         
