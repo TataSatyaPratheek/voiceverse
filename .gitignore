@@ -1,0 +1,22 @@
+
+# ignore all large media and dataset folders, checkpoints
+market_research/*
+grafana-data/*
+minio-data/*
+vocoder_ckpt/*
+tech/StyleTTS2/checkpoints/*
+tech/parler_ckpt/*
+
+# ignore python cache
+__pycache__/
+*.py[cod]
+
+# ignore environment folders
+.venv/
+
+# ignore logs and temp files
+*.log
+*.tmp
+
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
